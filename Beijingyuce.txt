@@ -1,0 +1,150 @@
+%%%背景预测算法
+%%%%清空工作区
+close all
+clear all
+clc
+%%%读取png原图
+im =' C:\Users\范经纬\Desktop\yuantu.png';
+Ipng=imread(im);
+%%%添加噪声信息
+image_original1=rgb2gray(Ipng);
+Im_original=im2double(image_original1);
+figure(1);
+imshow(Im_original);
+pp=0.01;%%%噪声方差
+Im_noise1=imnoise(Im_original,'gaussian',0,pp);
+[height, width]=size(Im_noise1);
+
+Im_noise=Im_noise1;
+figure(2)
+imshow(Im_noise);
+%imshow(image_gaosi_noise,'border','tight','InitialMagnification','fit');
+%saveas(figure(1),'next_new','jpg');
+%imwrite(image_gaosi_noise,'nextpexils','jpg');
+%%%固定权值算法
+h2=[9 9 9 9 9 9 9
+    9 4 4 4 4 4 9
+    9 4 1 1 1 4 9
+    9 4 1 0 1 4 9
+    9 4 1 1 1 4 9
+    9 4 4 4 4 4 9
+    9 9 9 9 9 9 9]/288;
+Ifilt1=imfilter(Im_noise,h2,'conv','replicate');
+Istar1 = Im_noise - Ifilt1;
+figure(3)
+imshow(Istar1);
+Ierr1 = Istar1 - Im_original;
+Ierrarray1=Ierr1(:)';
+[mu1,sigma1]=normfit(Ierrarray1);
+d1=pdf('norm',Ierrarray1,mu1,sigma1);
+figure(4)
+plot(Ierrarray1,d1,'r.');
+
+hold on;
+%%%中值滤波
+Ifilt2=Im_noise;  
+for i=1:height-4  
+    for j=1:width-4  
+        %取邻域中值
+        window1=Im_noise(i:i+4,j:j+4);
+        m1=window1(:);    
+        mm1=median(m1);     
+        Ifilt2(i+2,j+2)=mm1;  
+    end  
+end
+Istar2 = Im_noise - Ifilt2;
+figure(5)
+imshow(Istar2);
+Ierr2 = Istar2 - Im_original;
+Ierrarray2=Ierr2(:)';
+[mu2,sigma2]=normfit(Ierrarray2);
+d2=pdf('norm',Ierrarray2,mu2,sigma2);
+figure(4)
+plot(Ierrarray2,d2,'b.'); 
+
+hold on;
+%%变邻域
+Ifilt2=Im_noise; 
+h1=[ 4 4 4 4 4 
+     4 1 1 1 4  
+     4 1 0 1 4  
+     4 1 1 1 4 
+     4 4 4 4 4  ]/72;
+for i=3:height-2  
+    for j=3:width-2  
+       c=Im_noise(i-2:i+2,j-2:j+2); %取出x1中从(i,j)开始的n行n列元素,即模板(n×n的) 
+     %  myvar=var([x1(i-2,j-2) x1(i-2,j-1) x1(i-2,j) x1(i-2,j+1) x1(i-2,j+2) x1(i-1,j-2) x1(i-1,j-1) x1(i-1,j) x1(i-1,j+1) x1(i-1,j+2) x1(i,j-2) x1(i,j-1) x1(i,j) x1(i,j+1) x1(i,j+2) x1(i+1,j-2) x1(i+1,j-1) x1(i+1,j) x1(i+1,j+1) x1(i+1,j+2) x1(i+2,j-2) x1(i+2,j-1) x1(i+2,j) x1(i+2,j+1) x1(i+2,j+2)]);
+       myvar=var([Im_noise(i-2,j-2) Im_noise(i-2,j-1) Im_noise(i-2,j) Im_noise(i-2,j+1) Im_noise(i-2,j+2) Im_noise(i-1,j-2) Im_noise(i-1,j-1) Im_noise(i-1,j) Im_noise(i-1,j+1) Im_noise(i-1,j+2) Im_noise(i,j-2) Im_noise(i,j-1) Im_noise(i,j) Im_noise(i,j+1) Im_noise(i,j+2) Im_noise(i+1,j-2) Im_noise(i+1,j-1) Im_noise(i+1,j) Im_noise(i+1,j+1) Im_noise(i+1,j+2) Im_noise(i+2,j-2) Im_noise(i+2,j-1) Im_noise(i+2,j) Im_noise(i+2,j+1) Im_noise(i+2,j+2)]);
+     if(myvar>=5.723e-03)%这里用来区别现在的邻域是位于内部区域还是背景和星点的交叉区域
+        e=c(:);     
+        mm=median(e);    
+        for x=1:5
+            for y=1:5
+                if(Ifilt2(i+x-3,j+x-3)>mm)
+                Ifilt2(i+x-3,j+x-3)=0;
+                end 
+            end
+        end
+     end
+     end  
+end   
+Ifilt_2=imfilter(Ifilt2,h1,'conv','replicate');
+Istar3 = Im_noise - Ifilt_2;
+figure(6)
+imshow(Istar3);
+Ierr3 = Istar3 - Im_original;
+Ierrarray3=Ierr3(:)';
+[mu3,sigma3]=normfit(Ierrarray3);
+d3=pdf('norm',Ierrarray3,mu3,sigma3);
+figure(4)
+plot(Ierrarray3,d3,'g.'); 
+
+hold on;
+%%自适应变邻域
+x3=zeros(height,width);
+theold=max(Im_noise(:))*0.7;%进行多次尝试取最大灰度值Imax的0.5-0.8倍作为阈值能够较好的检测出单点噪声;
+hh=[ 0 0 0 0 0
+     0 0 0 0 0
+     0 0 1 0 0
+     0 0 0 0 0
+     0 0 0 0 0];
+for i=3:height-2
+    for j=3:width-2
+         num=0;
+        %这里用来判断是噪声点还是原始的星点
+        if(Im_noise(i,j)>theold)
+            d=Im_noise(i-2:i+2,j-2:j+2);
+            for a=1:5
+                for b=1:5
+                    if( d(a,b)>theold)
+                        num=num+1;
+                    end
+                end
+            end
+            if(num<3)%此时则认为其为噪声点
+                x3(i,j)=0.9*Im_noise(i,j);
+              %  number=0;
+            end
+        end
+    end
+end
+Ifilt_c=imfilter(x3,hh,'conv','replicate');
+Ifilt4=Ifilt_2+Ifilt_c;
+Istar4= Im_noise - Ifilt4;
+figure(7)
+imshow(Istar4);
+Ierr4= Istar4- Im_original;
+Ierrarray4=Ierr4(:)';
+[mu4,sigma4]=normfit(Ierrarray4);
+d4=pdf('norm',Ierrarray4,mu4,sigma4);
+figure(4)
+plot(Ierrarray4,d4,'y.'); 
+
+Ierr0=Im_noise- Im_original;
+Ierrarray0=Ierr0(:)';
+[mu0,sigma0]=normfit(Ierrarray0);
+d0=pdf('norm',Ierrarray0,mu0,sigma0);
+figure(4)
+plot(Ierrarray0,d0,'k.');
+legend 固定权值 中值滤波 变邻域 自适应 含噪声
+hold off;
